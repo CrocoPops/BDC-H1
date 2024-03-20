@@ -8,6 +8,7 @@ public class Homework1{
     public static void main(String[] args) throws IOException {
 
         // Check if the number of arguments is correct
+        System.out.println(args.length);
         if(args.length != 1)
             throw new IllegalArgumentException("Wrong number of params!");
 
@@ -16,6 +17,7 @@ public class Homework1{
         while (scanner.hasNextLine()) {
             String[] cords = scanner.nextLine().split(",");
             points.add(new Point(Float.parseFloat(cords[0]), Float.parseFloat(cords[1])));
+            System.out.println(cords[0] + ", " + cords[1]);
         }
 
     }
