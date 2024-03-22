@@ -7,12 +7,13 @@ import scala.Tuple3;
 import java.io.*;
 import java.util.*;
 
+
 public class Homework1{
 
     public static void main(String[] args) throws IOException {
         // Check if the number of arguments is correct
         System.out.println(args.length);
-        if(args.length != 5)
+        if (args.length != 5)
             throw new IllegalArgumentException("Wrong number of params!");
 
         // Read all points in the file and add them to the  (integers), and must compute and print the following information.list of points
@@ -20,41 +21,33 @@ public class Homework1{
         List<Point> points = new ArrayList<>();
         while (scanner.hasNextLine()) {
             String[] cords = scanner.nextLine().split(",");
-            points.add(new Point(Double.parseDouble(cords[0]), Double.parseDouble(cords[1])));
+            points.add(new Point(Float.parseFloat(cords[0]), Float.parseFloat(cords[1])));
         }
 
-        // Read D, M, K parameters
-        float D;
-        int M;
-        int K;
-
-        try {
-            D = Float.parseFloat(args[1]);
-        } catch(NumberFormatException e){
-            throw new IllegalArgumentException("Param D is not a float!");
-        }
+        // Read D, M, K, L parameters
+        float D = Float.parseFloat(args[1]);
+        int M = 1; // Default
+        int K = 1; // Default
+        int L = 1; //default
 
         try {
             M = Integer.parseInt(args[2]);
-        } catch(NumberFormatException e){
+        } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Param M is not an integer!");
         }
 
         try {
             K = Integer.parseInt(args[3]);
-        } catch(NumberFormatException e){
+        } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Param K is not an integer!");
         }
 
         ExactOutliers(points, D, M, K);
 
-        //Add the control for param L in the task2
-        int L;
-
         try {
             L = Integer.parseInt(args[4]);
-        } catch(NumberFormatException e){
-            throw new IllegalArgumentException("Param L is not an integer!");
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Param L is not integer!");
         }
 
         SparkConf conf = new SparkConf(true).setAppName("OutlierDetector");
@@ -78,23 +71,25 @@ public class Homework1{
         // Computation in Spark partitions, without gathering together all points of a cell.
 
         // ROUND 1
-        JavaRDD<Tuple2<Tuple2<Double, Double>, Integer>>  cell = docs.flatMapToPair(document -> { // <-- MAP PHASE (R1)
+        JavaRDD<Tuple2<Tuple2<Integer, Integer>, Integer>>  cell = docs.flatMapToPair(document -> { // <-- MAP PHASE (R1)
             String[] coord = document.split(",");
-            HashMap<Tuple2<Double, Double>, Integer> counts = new HashMap<>();
-            ArrayList<Tuple2<Tuple2<Double, Double>, Integer>> pairs = new ArrayList<>();
-            double lambda = Math.floor(D/(2*Math.sqrt(2)));
-            Tuple2<Double, Double> key = new Tuple2<>(Math.floor(Integer.parseInt(coord[0])/lambda), Math.floor(Integer.parseInt(coord[1])/lambda));
+            HashMap<Tuple2<Integer, Integer>, Integer> counts = new HashMap<>();
+            ArrayList<Tuple2<Tuple2<Integer, Integer>, Integer>> pairs = new ArrayList<>();
+            // Compute the cells coordinates
+            double lambda = D/(2*Math.sqrt(2));
+            Tuple2<Integer, Integer> key = new Tuple2<>((int) Math.floor(Float.parseFloat(coord[0])/lambda), (int) Math.floor(Float.parseFloat(coord[1])/lambda));
             counts.put(key, 1);
-            for(Map.Entry<Tuple2<Double, Double>, Integer> e : counts.entrySet()) {
-                Tuple2<Tuple2<Double, Double>, Integer> tuple = new Tuple2<>(e.getKey(), e.getValue());
+            for(Map.Entry<Tuple2<Integer, Integer>, Integer> e : counts.entrySet()) {
+                Tuple2<Tuple2<Integer, Integer>, Integer> tuple = new Tuple2<>(e.getKey(), e.getValue());
                 pairs.add(tuple);
             }
             return pairs.iterator();
         })
         .groupByKey()// <--SHUFFLE + GROUPING
         .map(pair -> { // <-- REDUCE PHASE (R1)
-            Tuple2<Double, Double> cellKey = pair._1();
+            Tuple2<Integer, Integer> cellKey = pair._1();
             Iterable<Integer> counts = pair._2();
+            // Compute the total points in a specific cell in this partition
             int sum = 0;
             for (int count : counts) {
                 sum += count;
@@ -105,26 +100,25 @@ public class Homework1{
         // Step B: transforms the RDD of cells, resulting from Step A, by attaching to each element, relative to a
         // non-empty cell C, the values |N3(C)| and |N7(C)|, as additional info. To this purpose, you can assume that
         // the total number of non-empty cells is small with respect to the capacity of each executor's memory.
-        JavaRDD<Tuple3<Tuple2<Double, Double>, Integer, Tuple2<Integer, Integer>>> cellNeighbors = cell.map(pair -> {
-            double i = pair._1()._1();
-            double j = pair._1()._2();
+
+        // Round 2
+        JavaRDD<Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>>> cellNeighbors = cell.map(pair -> {
+            int i = pair._1()._1();
+            int j = pair._1()._2();
             int totalCount = pair._2();
             int N3 = 0;
             int N7 = 0;
 
             for(int dx = -3; dx <= 3; dx++) {
                 for(int dy = -3; dy <= 3; dy++) {
-                    Tuple2<Double, Double> neighborKey = new Tuple2<>(i + dx,j + dy);
+                    Tuple2<Integer, Integer> neighborKey = new Tuple2<>(i + dx,j + dy);
+                    //FIXXXXXX
                     int neighborCount = cell.filter(p -> pair._1().equals(neighborKey))
                             .map(Tuple2::_2)
                             .first();
-                    if(Math.abs(dx) + Math.abs(dy) <= 2) {
+                    if ((Math.abs(dx) <= 1) && (Math.abs(dy) <= 1))
                         N3 += neighborCount;
-                        N7 += neighborCount;
-                    }
-                    else {
-                        N7 += neighborCount;
-                    }
+                    N7 += neighborCount;
                 }
             }
             return new Tuple3<>(new Tuple2<>(i, j), totalCount, new Tuple2<>(N3, N7));
@@ -141,18 +135,18 @@ public class Homework1{
         System.out.println("Number of sure (" + D + "," + M + ") - outliers: " + sureOutliers);
         System.out.println("Number of uncertain points: " + uncertainOutliers);
 
-        List<Tuple3<Tuple2<Double, Double>, Integer, Tuple2<Integer, Integer>>> topKCells =
+        List<Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>>> topKCells =
                 cellNeighbors.takeOrdered(K, (t1, t2) -> Integer.compare(t1._3()._1(), t2._3()._1()));
 
         System.out.println("First " + K + " non-empty cells in non-decreasing order of |N3(C)|: ");
 
-        for(Tuple3<Tuple2<Double, Double>, Integer, Tuple2<Integer, Integer>> cellInfo : topKCells)
+        for(Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>> cellInfo : topKCells)
             System.out.println("Cell: (" + cellInfo._1()._1() + ", " + cellInfo._1()._2() + "). |N3(C)|: " + cellInfo._3()._1());
     }
 
     /**
      * Algorithm 1
-     * @param points
+     * @param points -
      * @param D
      * @param M
      * @param K
