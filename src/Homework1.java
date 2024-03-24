@@ -1,9 +1,9 @@
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 import scala.Tuple3;
-
 import java.io.*;
 import java.util.*;
 
@@ -51,10 +51,12 @@ public class Homework1{
         }
 
         SparkConf conf = new SparkConf(true).setAppName("OutlierDetector");
-        JavaSparkContext sc = new JavaSparkContext(conf);
-        sc.setLogLevel("WARN");
-
-        JavaRDD<String> docs = sc.textFile(args[0]).repartition(L).cache();
+        JavaRDD<String> docs;
+        try (JavaSparkContext sc = new JavaSparkContext(conf)) {
+            sc.setLogLevel("WARN");
+            // Divide the inputFile in L partitions (each line is assigned to a specific partition
+            docs = sc.textFile(args[0]).repartition(L).cache();
+        }
         MRApproxOutliers(docs, D, M, K);
     }
 
@@ -71,27 +73,28 @@ public class Homework1{
         // Computation in Spark partitions, without gathering together all points of a cell.
 
         // ROUND 1
-        JavaRDD<Tuple2<Tuple2<Integer, Integer>, Integer>>  cell = docs.flatMapToPair(document -> { // <-- MAP PHASE (R1)
+        JavaPairRDD<Tuple2<Integer, Integer>, Long> cell = docs.flatMapToPair(document -> { // <-- MAP PHASE (R1)
             String[] coord = document.split(",");
-            HashMap<Tuple2<Integer, Integer>, Integer> counts = new HashMap<>();
-            ArrayList<Tuple2<Tuple2<Integer, Integer>, Integer>> pairs = new ArrayList<>();
+            HashMap<Tuple2<Integer, Integer>, Long> counts = new HashMap<>();
+            ArrayList<Tuple2<Tuple2<Integer, Integer>, Long>> pairs = new ArrayList<>();
             // Compute the cells coordinates
             double lambda = D/(2*Math.sqrt(2));
             Tuple2<Integer, Integer> key = new Tuple2<>((int) Math.floor(Float.parseFloat(coord[0])/lambda), (int) Math.floor(Float.parseFloat(coord[1])/lambda));
-            counts.put(key, 1);
-            for(Map.Entry<Tuple2<Integer, Integer>, Integer> e : counts.entrySet()) {
-                Tuple2<Tuple2<Integer, Integer>, Integer> tuple = new Tuple2<>(e.getKey(), e.getValue());
+            counts.put(key, 1L);
+            for(Map.Entry<Tuple2<Integer, Integer>, Long> e : counts.entrySet()) {
+                Tuple2<Tuple2<Integer, Integer>, Long> tuple = new Tuple2<>(e.getKey(), e.getValue());
                 pairs.add(tuple);
             }
             return pairs.iterator();
         })
+
         .groupByKey()// <--SHUFFLE + GROUPING
-        .map(pair -> { // <-- REDUCE PHASE (R1)
+        .mapToPair(pair -> { // <-- REDUCE PHASE (R1)
             Tuple2<Integer, Integer> cellKey = pair._1();
-            Iterable<Integer> counts = pair._2();
+            Iterable<Long> counts = pair._2();
             // Compute the total points in a specific cell in this partition
-            int sum = 0;
-            for (int count : counts) {
+            long sum = 0L;
+            for (long count : counts) {
                 sum += count;
             }
             return new Tuple2<>(cellKey, sum);
@@ -102,26 +105,40 @@ public class Homework1{
         // the total number of non-empty cells is small with respect to the capacity of each executor's memory.
 
         // Round 2
-        JavaRDD<Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>>> cellNeighbors = cell.map(pair -> {
+        JavaPairRDD<Tuple2<Integer, Integer>, Tuple3<Long, Long, Long>> cellNeighbors = cell.mapToPair(pair -> {
             int i = pair._1()._1();
             int j = pair._1()._2();
-            int totalCount = pair._2();
-            int N3 = 0;
-            int N7 = 0;
+            long totalCount = pair._2();
+            long N3 = 0L;
+            long N7 = 0L;
+
 
             for(int dx = -3; dx <= 3; dx++) {
                 for(int dy = -3; dy <= 3; dy++) {
-                    Tuple2<Integer, Integer> neighborKey = new Tuple2<>(i + dx,j + dy);
-                    //FIXXXXXX
-                    int neighborCount = cell.filter(p -> pair._1().equals(neighborKey))
-                            .map(Tuple2::_2)
-                            .first();
-                    if ((Math.abs(dx) <= 1) && (Math.abs(dy) <= 1))
-                        N3 += neighborCount;
-                    N7 += neighborCount;
+                    Tuple2<Integer, Integer> neighborKey = new Tuple2<>(i + dx, j + dy);
+                    long neighborCount = 0L;
+
+                    // Search the neighborKey in the RDD
+                    List<Long> neighborCountList = cell.lookup(neighborKey);
+                    if (!neighborCountList.isEmpty()) {
+                        Iterator<Long> iter =neighborCountList.iterator();
+
+                        if (iter.hasNext()) {
+                            neighborCount = iter.next();
+                        }
+
+                        if ((Math.abs(dx) <= 1) && (Math.abs(dy) <= 1)) {
+                            N3 += neighborCount;
+                        }
+                        N7 += neighborCount;
+                    } else System.out.println("Empty");
                 }
+
             }
-            return new Tuple3<>(new Tuple2<>(i, j), totalCount, new Tuple2<>(N3, N7));
+
+            Tuple3<Long, Long, Long> counts = new Tuple3<>(totalCount, N3, N7);
+
+            return new Tuple2<>(new Tuple2<>(i, j), counts);
         }).cache();
 
         // Print:
@@ -129,19 +146,19 @@ public class Homework1{
         // - Number of uncertain points
         // - First K non-empty cells, in non-decreasing order of |N3(C)|, their identifiers and value of |N3(C)|, one
         //   line per cell.
-        long sureOutliers = cellNeighbors.filter(triple -> triple._3()._2() <= M).count();
-        long uncertainOutliers = cellNeighbors.filter(triple -> triple._3()._1() <= M && triple._3()._2() > M).count();
+        long sureOutliers = cellNeighbors.filter(triple -> triple._2()._3() <= M).count();
+        long uncertainOutliers = cellNeighbors.filter(triple -> triple._2()._2() <= M && triple._2()._3() > M).count();
 
         System.out.println("Number of sure (" + D + "," + M + ") - outliers: " + sureOutliers);
         System.out.println("Number of uncertain points: " + uncertainOutliers);
 
-        List<Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>>> topKCells =
-                cellNeighbors.takeOrdered(K, (t1, t2) -> Integer.compare(t1._3()._1(), t2._3()._1()));
+        List<Tuple2<Tuple2<Integer, Integer>, Tuple3<Long, Long, Long>>> topKCells =
+                cellNeighbors.takeOrdered(K, (t1, t2) -> Long.compare(t1._2()._2(), t2._2()._2()));
 
         System.out.println("First " + K + " non-empty cells in non-decreasing order of |N3(C)|: ");
 
-        for(Tuple3<Tuple2<Integer, Integer>, Integer, Tuple2<Integer, Integer>> cellInfo : topKCells)
-            System.out.println("Cell: (" + cellInfo._1()._1() + ", " + cellInfo._1()._2() + "). |N3(C)|: " + cellInfo._3()._1());
+        for(Tuple2<Tuple2<Integer, Integer>, Tuple3<Long, Long, Long>> cellInfo : topKCells)
+            System.out.println("Cell: (" + cellInfo._1()._1() + ", " + cellInfo._1()._2() + "). |N3(C)|: " + cellInfo._2()._2());
     }
 
     /**
