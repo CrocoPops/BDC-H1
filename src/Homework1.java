@@ -12,7 +12,6 @@ public class Homework1{
 
     public static void main(String[] args) throws IOException {
         // Check if the number of arguments is correct
-        System.out.println(args.length);
         if (args.length != 5)
             throw new IllegalArgumentException("Wrong number of params!");
 
@@ -28,7 +27,7 @@ public class Homework1{
         float D = Float.parseFloat(args[1]);
         int M = 1; // Default
         int K = 1; // Default
-        int L = 1; //default
+        int L = 1; // Default
 
         try {
             M = Integer.parseInt(args[2]);
@@ -42,7 +41,7 @@ public class Homework1{
             throw new IllegalArgumentException("Param K is not an integer!");
         }
 
-        ExactOutliers(points, D, M, K);
+       ExactOutliers(points, D, M, K);
 
         try {
             L = Integer.parseInt(args[4]);
@@ -56,8 +55,8 @@ public class Homework1{
             sc.setLogLevel("WARN");
             // Divide the inputFile in L partitions (each line is assigned to a specific partition
             docs = sc.textFile(args[0]).repartition(L).cache();
+            MRApproxOutliers(docs, D, M, K);
         }
-        MRApproxOutliers(docs, D, M, K);
     }
 
     /**
@@ -119,6 +118,7 @@ public class Homework1{
                     long neighborCount = 0L;
 
                     // Search the neighborKey in the RDD
+                    //ERROR HERE
                     List<Long> neighborCountList = cell.lookup(neighborKey);
                     if (!neighborCountList.isEmpty()) {
                         Iterator<Long> iter =neighborCountList.iterator();
