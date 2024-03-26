@@ -1,3 +1,4 @@
+import javafx.util.Pair;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -5,6 +6,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Array;
 import scala.Tuple2;
 import scala.Tuple3;
 import java.io.*;
@@ -81,13 +83,6 @@ public class Homework1{
         }
     }
 
-    /**
-     * Algorithm 2
-     * @param docs - the RDD containing the document with the coordinates
-     * @param D - distance from the point
-     * @param M - number of points
-     * @param K - number of outliers to print
-     */
     public static void MRApproxOutliers(JavaRDD<String> docs, float D, int M, int K) {
         // Step A: transforms the input RDD into a RDD whose elements corresponds to the non-empty cells and, contain,
         // for each cell, its identifier (i, j) and the number of points of S that it contains.
@@ -164,35 +159,24 @@ public class Homework1{
 
     }
 
-    /**
-     * Algorithm 1
-     * @param points - List of points from where we want to calculate outliers
-     * @param D - Radius for the outlier definition check
-     * @param M - Number of points that have to be in the radius D for a point not to be an outlier
-     * @param K - Number of points to print
-     */
     public static void ExactOutliers(List<Point> points, float D, int M, int K) {
-        List<Point> outliers = new ArrayList<>();
-        // Calculating the distances between each pair of points and counting
-        // how many distances are <= D.
-        // After that, if the count is <= M, we add the point to the outliers list
-        // TODO: Implement a more efficient way to calculate this
-        Map<Point, Long> counts = new HashMap<>();
+        Long[] counts = new Long[points.size()];
+        Arrays.fill(counts, 1L);
 
-        for(int i = 0; i < points.size(); i++){
-            counts.put(points.get(i), 1L);
-            for(int j = i + 1; j < points.size(); j++) {
-                double dist = points.get(i).distanceTo(points.get(j));
-                if(dist <= D){
-                    counts.put(points.get(i), counts.getOrDefault(points.get(i), 0L) + 1);
-                    counts.put(points.get(j), counts.getOrDefault(points.get(j), 0L) + 1);
+        for(int i = 0; i < points.size(); i++)
+            for(int j = i + 1; j < points.size(); j++)
+                if(points.get(i).distanceTo(points.get(j)) <= D){
+                    counts[i] += 1;
+                    counts[j] += 1;
                 }
-            }
-        }
 
-        for(Point p : points)
-            if(counts.get(p) != null && counts.get(p) <= M)
-                outliers.add(p);
+
+
+        List<Point> outliers = new ArrayList<>();
+        for (int i = 0; i < points.size(); i++)
+            if(counts[i] <= M)
+                outliers.add(points.get(i));
+
 
 
         // Print the number of (D,M)-outliers
@@ -202,4 +186,32 @@ public class Homework1{
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
             System.out.printf("Point: (%.3f, %.3f)%n", outliers.get(i).getX(), outliers.get(i).getY());
     }
+
+    private static class Point {
+        private final double x;
+        private final double y;
+
+        public Point(double x, double y){
+            this.x = x;
+            this.y = y;
+        }
+
+        public double getX(){
+            return this.x;
+        }
+
+        public double getY(){
+            return this.y;
+        }
+
+        public double distanceTo(Point other) {
+            double deltaX = other.getX() - this.getX();
+            double deltaY = other.getY() - this.getY();
+            // return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+        }
+
+    }
+
 }
+
