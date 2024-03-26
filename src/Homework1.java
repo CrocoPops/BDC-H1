@@ -6,6 +6,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.jetbrains.annotations.NotNull;
 import scala.Array;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -160,58 +161,79 @@ public class Homework1{
     }
 
     public static void ExactOutliers(List<Point> points, float D, int M, int K) {
-        Long[] counts = new Long[points.size()];
-        Arrays.fill(counts, 1L);
+        // Create array to contain points and their respective close points (<= D)
+        PointsNearby[] counts = new PointsNearby[points.size()];
 
+        // Initialize the data-structure for each point
+        // Initializing at 1 because we have to consider the point itself
+        for (int i = 0; i < points.size(); i++)
+            counts[i] = new PointsNearby(points.get(i), 1L);
+
+        // Compute how many points are close (<= D) for each point
+        // Using the symmetry we make N(N-1)/2 calculations instead of N^2
         for(int i = 0; i < points.size(); i++)
             for(int j = i + 1; j < points.size(); j++)
+
+                // If we find a point which distance is lower than D, we update both
+                // the points used in the calculation (because of symmetry)
                 if(points.get(i).distanceTo(points.get(j)) <= D){
-                    counts[i] += 1;
-                    counts[j] += 1;
+                    counts[i].nearby += 1;
+                    counts[j].nearby += 1;
                 }
 
 
-
+        // Find the outliers if nearby points (closer than D) are less than M
         List<Point> outliers = new ArrayList<>();
         for (int i = 0; i < points.size(); i++)
-            if(counts[i] <= M)
+            if(counts[i].nearby <= M)
                 outliers.add(points.get(i));
-
 
 
         // Print the number of (D,M)-outliers
         System.out.println("Number of Outliers = " + outliers.size());
 
+        // Sort the outliers (using the PointsNearby.compareTo method)
+        Arrays.sort(counts);
+
         // Print the first K outliers
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
-            System.out.printf("Point: (%.3f, %.3f)%n", outliers.get(i).getX(), outliers.get(i).getY());
+            System.out.printf("Point: (%.3f, %.3f) - %d %n", outliers.get(i).x, outliers.get(i).y, counts[i].nearby);
+    }
+}
+
+// Class used as struct to contain information about the points
+class Point {
+    double x;
+    double y;
+
+    public Point(double x, double y){
+        this.x = x;
+        this.y = y;
     }
 
-    private static class Point {
-        private final double x;
-        private final double y;
-
-        public Point(double x, double y){
-            this.x = x;
-            this.y = y;
-        }
-
-        public double getX(){
-            return this.x;
-        }
-
-        public double getY(){
-            return this.y;
-        }
-
-        public double distanceTo(Point other) {
-            double deltaX = other.getX() - this.getX();
-            double deltaY = other.getY() - this.getY();
-            // return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
-        }
-
+    public double distanceTo(Point other) {
+        double deltaX = other.x - this.x;
+        double deltaY = other.y - this.y;
+        return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
     }
 
 }
+
+// Class used as struct to contain information about a point and its neighbours
+// Implements the comparable interface so we can sort the array (counts)
+class PointsNearby implements Comparable<PointsNearby>{
+    public Point p;
+    public Long nearby;
+
+    public PointsNearby(Point p, Long nearby){
+        this.p = p;
+        this.nearby = nearby;
+    }
+
+    @Override
+    public int compareTo(@NotNull PointsNearby o) {
+        return Long.compare(this.nearby, o.nearby);
+    }
+}
+
 
