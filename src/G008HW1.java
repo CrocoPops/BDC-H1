@@ -1,4 +1,3 @@
-import javafx.util.Pair;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -7,20 +6,18 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.NotNull;
-import scala.Array;
 import scala.Tuple2;
 import scala.Tuple3;
 import java.io.*;
 import java.util.*;
 
 
-public class Homework1{
+public class G008HW1 {
 
     public static void main(String[] args) throws IOException {
         // Check if the number of arguments is correct
         if (args.length != 5)
             throw new IllegalArgumentException("Wrong number of params!");
-
 
         ArrayList<Logger> loggers = Collections.<Logger>list(LogManager.getCurrentLoggers());
         loggers.add(LogManager.getRootLogger());
@@ -41,9 +38,9 @@ public class Homework1{
 
         // Read D, M, K, L parameters
         float D = Float.parseFloat(args[1]);
-        int M = 1; // Default
-        int K = 1; // Default
-        int L = 1; // Default
+        int M;
+        int K;
+        int L;
 
         try {
             M = Integer.parseInt(args[2]);
@@ -83,7 +80,6 @@ public class Homework1{
 
         }
     }
-
     public static void MRApproxOutliers(JavaRDD<String> docs, float D, int M, int K) {
         // Step A: transforms the input RDD into a RDD whose elements corresponds to the non-empty cells and, contain,
         // for each cell, its identifier (i, j) and the number of points of S that it contains.
@@ -203,7 +199,7 @@ public class Homework1{
 
         // Print the first K outliers
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
-            System.out.printf("Point: (%.3f, %.3f) - %d %n", outliers.get(i).x, outliers.get(i).y, counts[i].nearby);
+            System.out.printf("Point: (%.2f, %.2f)\n", outliers.get(i).x, outliers.get(i).y);
     }
 }
 
@@ -226,7 +222,7 @@ class Point {
 }
 
 // Class used as struct to contain information about a point and its neighbours
-// Implements the comparable interface so we can sort the array (counts)
+// Implements the comparable interface, so we can sort the array (counts)
 class PointsNearby implements Comparable<PointsNearby>{
     public Point p;
     public Long nearby;
