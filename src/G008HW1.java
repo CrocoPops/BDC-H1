@@ -54,12 +54,18 @@ public class G008HW1 {
             throw new IllegalArgumentException("Param K is not an integer!");
         }
 
-        long startTime = System.currentTimeMillis();
-        ExactOutliers(points, D, M, K);
-        long endTime   = System.currentTimeMillis();
-        long totalTime = endTime - startTime;
-        System.out.println("Running time of ExactOutliers = " + totalTime + "ms");
+        long startTime;
+        long endTime;
+        long totalTime;
 
+        // Check if number of points is lower than 200000
+        if(points.size() <= 200000) {
+            startTime = System.currentTimeMillis();
+            ExactOutliers(points, D, M, K);
+            endTime = System.currentTimeMillis();
+            totalTime = endTime - startTime;
+            System.out.println("Running time of ExactOutliers = " + totalTime + "ms");
+        }
         try {
             L = Integer.parseInt(args[4]);
         } catch (NumberFormatException e) {
@@ -199,7 +205,7 @@ public class G008HW1 {
 
         // Print the first K outliers
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
-            System.out.printf("Point: (%.2f, %.2f)\n", outliers.get(i).x, outliers.get(i).y);
+            System.out.printf("Point: (%.4f, %.4f)\n", outliers.get(i).x, outliers.get(i).y);
     }
 }
 
