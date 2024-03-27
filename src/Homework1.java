@@ -107,6 +107,8 @@ public class Homework1{
         // Saving the non-empty cells in a local structure
         Map<Tuple2<Integer, Integer>, Long> nonEmptyCells = cell.collectAsMap();
 
+//        for(Tuple2<Integer, Integer> k : nonEmptyCells.keySet())
+//            System.out.println(k + " --> " + nonEmptyCells.get(k));
         // Step B: transforms the RDD of cells, resulting from Step A, by attaching to each element, relative to a
         // non-empty cell C, the values |N3(C)| and |N7(C)|, as additional info. To this purpose, you can assume that
         // the total number of non-empty cells is small with respect to the capacity of each executor's memory.
@@ -143,11 +145,15 @@ public class Homework1{
 
 
         // Number of sure (D, M) - outliers
-        long sureOutliers = cellNeighbors.filter(triple -> triple._2()._3() <= M).count();
+        long sureOutliers = 0;
+        for(Tuple2<Tuple2<Integer, Integer>, Tuple3<Long, Long, Long>> i : cellNeighbors.filter(triple -> triple._2()._3() <= M).collect())
+            sureOutliers += i._2()._1();
         System.out.println("Number of sure outliers = " + sureOutliers);
 
         // Number of uncertain points
-        long uncertainOutliers = cellNeighbors.filter(triple -> triple._2()._2() <= M && triple._2()._3() > M).count();
+        long uncertainOutliers = 0;
+        for(Tuple2<Tuple2<Integer, Integer>, Tuple3<Long, Long, Long>> i : cellNeighbors.filter(triple -> triple._2()._2() <= M && triple._2()._3() > M).collect())
+            uncertainOutliers += i._2()._1();
         System.out.println("Number of uncertain points = " + uncertainOutliers);
 
         // First K non-empty cells in non-decreasing order of |N3(C)|
