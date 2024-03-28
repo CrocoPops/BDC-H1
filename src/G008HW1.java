@@ -149,7 +149,7 @@ public class G008HW1 {
 
                 // If we find a point which distance is lower than D, we update both
                 // the points used in the calculation (because of symmetry)
-                if(points.get(i).distanceTo(points.get(j)) <= D){
+                if(points.get(i).distanceTo(points.get(j)) <= Math.pow(D, 2)){
                     counts[i].nearby += 1;
                     counts[j].nearby += 1;
                 }
@@ -183,7 +183,7 @@ class Point {
     public double distanceTo(Point other) {
         double deltaX = other.x - this.x;
         double deltaY = other.y - this.y;
-        return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+        return Math.pow(deltaX, 2) + Math.pow(deltaY, 2);
     }
 
 }
