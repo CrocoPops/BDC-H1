@@ -2,6 +2,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.PairFunction;
 import org.jetbrains.annotations.NotNull;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -32,20 +33,20 @@ public class G008HW1 {
 
         // Read all points in the file and add them to the list
         Scanner scanner = new Scanner(new File(args[0]));
-        List<Point> points = new ArrayList<>();
+        List<Point> listOfPoints = new ArrayList<>();
         while (scanner.hasNextLine()) {
             String[] cords = scanner.nextLine().split(",");
-            points.add(new Point(Float.parseFloat(cords[0]), Float.parseFloat(cords[1])));
+            listOfPoints.add(new Point(Float.parseFloat(cords[0]), Float.parseFloat(cords[1])));
         }
 
         // Print the number of points
-        System.out.println("Number of points = " + points.size());
+        System.out.println("Number of points = " + listOfPoints.size());
 
         // Check if number of points is lower than 200000 and if so
         // compute ExactOutliers
-        if(points.size() <= 200000) {
+        if(listOfPoints.size() <= 200000) {
             startTime = System.currentTimeMillis();
-            ExactOutliers(points, D, M, K);
+            ExactOutliers(listOfPoints, D, M, K);
             endTime = System.currentTimeMillis();
             totalTime = endTime - startTime;
             System.out.println("Running time of ExactOutliers = " + totalTime + "ms");
@@ -56,27 +57,32 @@ public class G008HW1 {
         try (JavaSparkContext sc = new JavaSparkContext(conf)) {
             sc.setLogLevel("ERROR");
             // Divide the inputFile in L partitions (each line is assigned to a specific partition
-            JavaRDD<String> docs = sc.textFile(args[0]).repartition(L).cache();
+            JavaRDD<String> rawData = sc.textFile(args[0]).repartition(L).cache();
+            JavaPairRDD<Float, Float> inputPoints = rawData.mapToPair(document -> {
+                String[] cord = document.split(",");
+                Tuple2<Float, Float> point = new Tuple2<>(Float.parseFloat(cord[0]), Float.parseFloat(cord[1]));
+
+                return new Tuple2<>(point._1(), point._2());
+            });
             startTime = System.currentTimeMillis();
-            MRApproxOutliers(docs, D, M, K);
+            MRApproxOutliers(inputPoints, D, M, K);
             endTime   = System.currentTimeMillis();
             totalTime = endTime - startTime;
             System.out.println("Running time of MRApproxOutliers  = " + totalTime + "ms");
         }
     }
-    public static void MRApproxOutliers(JavaRDD<String> docs, float D, int M, int K) {
+    public static void MRApproxOutliers(JavaPairRDD<Float, Float> inputPoints, float D, int M, int K) {
         // ROUND 1
         // Mapping each pair (X,Y) into ((X,Y), 1)
-        JavaPairRDD<Tuple2<Integer, Integer>, Long> cell = docs.flatMapToPair(document -> { // <-- MAP PHASE (R1)
-            String[] cord = document.split(",");
+        JavaPairRDD<Tuple2<Integer, Integer>, Long> cell = inputPoints.flatMapToPair(point -> { // <-- MAP PHASE (R1)
 
             // Compute the cells coordinates
             double lambda = D/(2*Math.sqrt(2));
 
             // Finding cell coordinates
             Tuple2<Integer, Integer> cellCoordinates = new Tuple2<>(
-                    (int) Math.floor(Float.parseFloat(cord[0]) / lambda),
-                    (int) Math.floor(Float.parseFloat(cord[1]) / lambda)
+                    (int) Math.floor(point._1() / lambda),
+                    (int) Math.floor(point._2() / lambda)
             );
 
             return Collections.singletonList(new Tuple2<>(cellCoordinates, 1L)).iterator();
@@ -133,32 +139,32 @@ public class G008HW1 {
 
     }
 
-    public static void ExactOutliers(List<Point> points, float D, int M, int K) {
+    public static void ExactOutliers(List<Point> listOfPoints, float D, int M, int K) {
         // Create array to contain points and their respective close points (<= D)
-        PointsNearby[] counts = new PointsNearby[points.size()];
+        PointsNearby[] counts = new PointsNearby[listOfPoints.size()];
 
         // Initialize the data-structure for each point
         // Initializing at 1 because we have to consider the point itself
-        for (int i = 0; i < points.size(); i++)
-            counts[i] = new PointsNearby(points.get(i), 1L);
+        for (int i = 0; i < listOfPoints.size(); i++)
+            counts[i] = new PointsNearby(listOfPoints.get(i), 1L);
 
         // Compute how many points are close (<= D) for each point
         // Using the symmetry we make N(N-1)/2 calculations instead of N^2
-        for(int i = 0; i < points.size(); i++)
-            for(int j = i + 1; j < points.size(); j++)
+        for(int i = 0; i < listOfPoints.size(); i++)
+            for(int j = i + 1; j < listOfPoints.size(); j++)
 
                 // If we find a point which distance is lower than D, we update both
                 // the points used in the calculation (because of symmetry)
-                if(points.get(i).distanceTo(points.get(j)) <= Math.pow(D, 2)){
+                if(listOfPoints.get(i).distanceTo(listOfPoints.get(j)) <= Math.pow(D, 2)){
                     counts[i].nearby += 1;
                     counts[j].nearby += 1;
                 }
 
         // Find the outliers if nearby points (closer than D) are less than M
         List<Point> outliers = new ArrayList<>();
-        for (int i = 0; i < points.size(); i++)
+        for (int i = 0; i < listOfPoints.size(); i++)
             if(counts[i].nearby <= M)
-                outliers.add(points.get(i));
+                outliers.add(listOfPoints.get(i));
 
         // Print the number of (D,M)-outliers
         System.out.println("Number of Outliers = " + outliers.size());
