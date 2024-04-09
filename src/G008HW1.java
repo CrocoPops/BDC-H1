@@ -140,14 +140,6 @@ public class G008HW1 {
     }
 
     public static void ExactOutliers(List<Point> listOfPoints, float D, int M, int K) {
-        // Create array to contain points and their respective close points (<= D)
-        PointsNearby[] counts = new PointsNearby[listOfPoints.size()];
-
-        // Initialize the data-structure for each point
-        // Initializing at 1 because we have to consider the point itself
-        for (int i = 0; i < listOfPoints.size(); i++)
-            counts[i] = new PointsNearby(listOfPoints.get(i), 1L);
-
         // Compute how many points are close (<= D) for each point
         // Using the symmetry we make N(N-1)/2 calculations instead of N^2
         for(int i = 0; i < listOfPoints.size(); i++)
@@ -156,34 +148,36 @@ public class G008HW1 {
                 // If we find a point which distance is lower than D, we update both
                 // the points used in the calculation (because of symmetry)
                 if(listOfPoints.get(i).distanceTo(listOfPoints.get(j)) <= Math.pow(D, 2)){
-                    counts[i].nearby += 1;
-                    counts[j].nearby += 1;
+                    listOfPoints.get(i).nearby += 1;
+                    listOfPoints.get(j).nearby += 1;
                 }
 
         // Find the outliers if nearby points (closer than D) are less than M
         List<Point> outliers = new ArrayList<>();
-        for (int i = 0; i < listOfPoints.size(); i++)
-            if(counts[i].nearby <= M)
-                outliers.add(listOfPoints.get(i));
+        for (Point p : listOfPoints)
+            if(p.nearby <= M)
+                outliers.add(p);
 
         // Print the number of (D,M)-outliers
         System.out.println("Number of Outliers = " + outliers.size());
 
-        // Print the first K outliers
-        Arrays.sort(counts);
+        // Print K points based on |B_S(p,D)|
+        Collections.sort(outliers);
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
             System.out.println("Point: (" + outliers.get(i).x +", "+ outliers.get(i).y +")");
     }
 }
 
 // Class used as struct to contain information about the points
-class Point {
+class Point implements Comparable<Point>{
     float x;
     float y;
+    Long nearby;
 
     public Point(float x, float y){
         this.x = x;
         this.y = y;
+        this.nearby = 1L;
     }
 
     public double distanceTo(Point other) {
@@ -192,23 +186,11 @@ class Point {
         return Math.pow(deltaX, 2) + Math.pow(deltaY, 2);
     }
 
-}
-
-// Class used as struct to contain information about a point and its neighbours
-// Implements the comparable interface, so we can sort the array (counts)
-class PointsNearby implements Comparable<PointsNearby>{
-    public Point p;
-    public Long nearby;
-
-    public PointsNearby(Point p, Long nearby){
-        this.p = p;
-        this.nearby = nearby;
-    }
-
     @Override
-    public int compareTo(@NotNull PointsNearby o) {
+    public int compareTo(@NotNull Point o) {
         return Long.compare(this.nearby, o.nearby);
     }
+
 }
 
 
