@@ -172,23 +172,23 @@ public class G008HW1 {
         // Print the first K outliers
         Arrays.sort(counts);
         for (int i = 0; i < Math.min(K, outliers.size()); i++)
-            System.out.printf("Point: (%.4f, %.4f)\n", outliers.get(i).x, outliers.get(i).y);
+            System.out.println("Point: (" + outliers.get(i).x +", "+ outliers.get(i).y +")");
     }
 }
 
 // Class used as struct to contain information about the points
 class Point {
-    double x;
-    double y;
+    float x;
+    float y;
 
-    public Point(double x, double y){
+    public Point(float x, float y){
         this.x = x;
         this.y = y;
     }
 
     public double distanceTo(Point other) {
-        double deltaX = other.x - this.x;
-        double deltaY = other.y - this.y;
+        float deltaX = other.x - this.x;
+        float deltaY = other.y - this.y;
         return Math.pow(deltaX, 2) + Math.pow(deltaY, 2);
     }
 
